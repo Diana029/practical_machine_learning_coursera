@@ -1,0 +1,115 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries
+```{r}
+library("caret")
+```
+###Load the data###
+load the data and replace empty values by NA
+```{r}
+data_train <- read.csv(file="C://Users/Dee/Desktop/HSE/ÌÀÃÀ/2 êóðñ/Coursera. Practical Machine learning/pml-training.csv", header=TRUE, sep=",", na.strings = c("", "NA"))
+data_test <- read.csv(file="C://Users/Dee/Desktop/HSE/ÌÀÃÀ/2 êóðñ/Coursera. Practical Machine learning/pml-testing.csv", header=TRUE, sep=",", na.strings = c("", "NA"))
+dim(data_train)
+dim(data_test)
+```
+
+###Clean the data###
+remove columns with missing value.
+```{r}
+train_set <- data_train[,(colSums(is.na(data_train)) == 0)]
+dim(train_set)
+test_set <- data_test[,(colSums(is.na(data_test)) == 0)]
+dim(test_set)
+```
+
+###Preprocess the data###
+remove near zero variance predictors in train set
+```{r}
+class_train <- train_set$classe
+predictors_train <- train_set[,-c(60)]
+nzv_pred_train <- nearZeroVar(predictors_train, names = TRUE)
+predictors_without_nzv_train <- predictors_train[, setdiff(names(predictors_train), nzv_pred_train)]
+```
+remove near zero variance predictors in test set
+```{r}
+predictors_test <- test_set[,-c(60)]
+nzv_pred_test <- nearZeroVar(predictors_test, names = TRUE)
+predictors_without_nzv_test <- predictors_test[, setdiff(names(predictors_test), nzv_pred_test)]
+```
+transform for skewness in train set
+```{r}
+tr_predictors_train <- preProcess(predictors_without_nzv_train, method = c("BoxCox", "center", "scale"))
+transf_train <- predict(tr_predictors_train, predictors_without_nzv_train)
+head(transf_train) 
+```
+transform for skewnessin test set
+```{r}
+tr_predictors_test <- preProcess(predictors_without_nzv_test, method = c("BoxCox", "center", "scale"))
+transf_test <- predict(tr_predictors_test, predictors_without_nzv_test)
+head(transf_test)
+```
+combine class and predictors for train set
+```{r}
+full_train_transf <- data.frame(class_train,transf_train)
+```
+
+###partition training data to train and validation sets###
+```{r}
+set.seed(123456)
+idxTrain<- createDataPartition(full_train_transf$class_train, p=3/4, list=FALSE)
+training<- full_train_transf[idxTrain, ]
+validation <- full_train_transf[-idxTrain, ]
+dim(training)
+dim(validation)
+```
+
+###Train Models###
+random forest
+```{r}
+library(randomForest)
+rf_model <- randomForest(training$class_train~.,
+                         data = training)
+print(rf_model)
+```
+prediction
+```{r}
+pred_rf <- predict(rf_model, validation, , type = "class")
+```
+conf matrix
+```{r}
+conf_matrix <- confusionMatrix(pred_rf, validation$class_train)
+conf_matrix
+```
+
+decision tree
+```{r}
+library(rpart)
+dt_model <- rpart(training$class_train ~ .,
+                  data=training,
+                  method="class")
+dt_model
+```
+prediction
+```{r}
+pred_dt <- predict(dt_model, validation, type = "class")
+```
+conf matrix
+```{r}
+conf_matrix_dt <- confusionMatrix(pred_dt, validation$class_train)
+conf_matrix_dt
+```
+Suprisingly, decision trees showed better results(accuracy=1) then random Forest(accuracy=0.9998)
+out-of-sample error=(1-accuracy)* 100%: 0% for decision tree and 0.02% for random forest
+
+Testing model on test set
+```{r}
+pred_test <- predict(dt_model, transf_test,  type = "class")
+pred_test
+```
